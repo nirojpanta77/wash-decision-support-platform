@@ -4,8 +4,8 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#009999" />
-  <title>Nepal Flood WASH Decision Support Platform</title>
-  <meta name="description" content="Open-source WASH decision support platform for Nepal Flood 2026." />
+  <title>Nepal Flood 2026 — WASH Severity Analysis</title>
+  <meta name="description" content="Municipality-level WASH Severity Analysis for the Nepal Flood 2026 response." />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -192,7 +192,18 @@ button,select,input{font:inherit}.topbar{height:78px;background:var(--teal);bord
           </article>
           <article class="info-card">
             <h3>Data sources</h3>
-            <p>The analysis consolidates government and humanitarian sources, including affected-population estimates, government water-supply damage information, projected population in affected wards, IOM site assessments, WASH vulnerability indicators, physical-access evidence, flood-extent mapping and operational road-access information. The source register in the master dataset records source names, dates and analytical use.</p>
+            <p>The analysis uses multiple sources because no single dataset captures the full WASH situation. The main evidence streams currently included are:</p>
+            <table class="indicator-table method-table" style="margin-top:8px">
+              <tr><td>Affected population</td><td>Nepal Flood 2026 municipal WASH compilation and Flash Appeal affected-population estimates used for the affected-municipality cohort.</td></tr>
+              <tr><td>Population in affected wards</td><td>Projected 2026 population for wards identified as affected. This is shown as population residing in affected wards, not as a second estimate of people affected.</td></tr>
+              <tr><td>Damaged water-supply systems</td><td>Government “Details of Damage in the Drinking Water Sector” project list, using named systems, beneficiary population and reported damage cost where available.</td></tr>
+              <tr><td>Current WASH conditions</td><td>Municipality- and site-specific evidence compiled from current assessments and operational reporting. These indicators remain provisional because evidence is not equally systematic across all municipalities.</td></tr>
+              <tr><td>Holding centres</td><td>IOM site-level assessment data. The map uses the assessment CSV directly for coordinates, population, functional latrines, water shortage, storage, hygiene items and priority WASH gaps.</td></tr>
+              <tr><td>Pre-existing WASH vulnerability</td><td>Municipality indicator extracts covering Drinking Water access vulnerability, sanitation vulnerability and poverty/inequality. Comparable Gandaki Province data are included for affected municipalities in Gorkha and Tanahu.</td></tr>
+              <tr><td>Physical access</td><td>Operational access evidence, including Logistics Cluster / WFP / UNDSS road information and other response updates. Road classes are displayed as Not Passable, Passable with restrictions/Damaged, Passable/Undamaged, and Others.</td></tr>
+              <tr><td>Flood extent</td><td>Event flood-extent polygon data for the 2026 flood. Detailed polygon geometry is retained for map display rather than replacing it with municipality-level approximations.</td></tr>
+            </table>
+            <p style="margin-top:10px">A separate source register in the master dataset records the reference date, geographic level, analytical use and known limitations for each source.</p>
           </article>
         </div>
         <div class="about-stack">
