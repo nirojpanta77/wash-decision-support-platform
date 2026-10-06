@@ -803,22 +803,7 @@ function renderProfile(pcode){
   root.querySelectorAll('.profile-tab').forEach(btn=>btn.addEventListener('click',()=>{root.querySelectorAll('.profile-tab').forEach(x=>x.classList.remove('active'));btn.classList.add('active');renderProfileTab(p,btn.dataset.pTab);}));
   renderProfileTab(p,'overview');
 }
-function driverCandidates(p){
-  const a=affectedScore(p), w=damagedWssScore(p);
-  return [
-    {name:'People affected',score:a,detail:`${fmtInt.format(p.affected_population||0)} people affected (${pct0(p.affected_share)} of projected population)`},
-    {name:'Damaged water-supply systems',score:w,detail:p.damaged_wss_beneficiaries? `${fmtInt.format(p.damaged_wss_beneficiaries)} people served by reported damaged systems`:'No beneficiary population reported for damaged systems'},
-    {name:'Government-reported water-supply damage',score:n(p.govt_wss_damage_score),detail:p.govt_wss_damage_cost_npr? `Reported damage cost NPR ${fmtInt.format(p.govt_wss_damage_cost_npr)}`:'No reported damage cost'},
-    {name:'Current water access',score:n(p.water_access_score),detail:'Current-condition evidence — provisional'},
-    {name:'Water quality',score:n(p.water_quality_score),detail:'Current-condition evidence — provisional'},
-    {name:'Sanitation & hygiene',score:n(p.sanitation_hygiene_score),detail:'Current-condition evidence — provisional'},
-    {name:'Displacement pressure',score:n(p.displacement_pressure_score),detail:'Current-condition evidence — provisional'},
-    {name:'Drinking Water vulnerability',score:n(p.dw_vulnerability_score),detail:'Pre-existing WASH vulnerability'},
-    {name:'Sanitation vulnerability',score:n(p.san_vulnerability_score),detail:'Pre-existing WASH vulnerability'},
-    {name:'Poverty & inequality',score:n(p.poverty_inequality_score),detail:'Underlying socioeconomic vulnerability'},
-    {name:'Physical access constraints',score:n(p.physical_access_score),detail:'Access aggravating factor'}
-  ].filter(x=>x.score!=null).sort((a,b)=>b.score-a.score);
-}
+
 
 function severityClassFromScore(v){return scoreBand(v).className;}
 function driverNarrative(p){
