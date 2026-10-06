@@ -970,21 +970,46 @@ function drawLegendOnCanvas(ctx,W,H,large=false){
 }
 function exportMapImage(mode){
   const source=map.getCanvas(); if(!source)return;
-  const a4=mode==='a4', W=a4?3508:source.width, H=a4?2480:source.height;
-  const canvas=document.createElement('canvas');canvas.width=W;canvas.height=H;const ctx=canvas.getContext('2d');
+  const a4=mode==='a4';
+  const W=a4?3508:source.width, H=a4?2480:source.height;
+  const canvas=document.createElement('canvas');
+  canvas.width=W;canvas.height=H;
+  const ctx=canvas.getContext('2d');
   ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
-  const header=a4?180:0, footer=a4?90:0, availH=H-header-footer;
-  ctx.drawImage(source,0,header,W,availH);
+
+  const header=a4?180:0;
+  const footer=a4?90:42;
+  const availH=H-header-footer;
+  const scale=Math.min(W/source.width,availH/source.height);
+  const dw=source.width*scale, dh=source.height*scale;
+  const dx=(W-dw)/2, dy=header+(availH-dh)/2;
+  ctx.drawImage(source,dx,dy,dw,dh);
+
   if(a4){
-    ctx.fillStyle='#fff';ctx.fillRect(0,0,W,header);ctx.fillStyle='#009999';ctx.fillRect(0,0,W,20);
-    ctx.fillStyle='#024E6C';ctx.font='bold 58px Arial';ctx.fillText('Nepal Flood WASH Severity Analysis',72,82);
-    ctx.fillStyle='#555';ctx.font='34px Arial';ctx.fillText(currentTheme().name,72,132);
-    const p=DATA.byPcode.get(state.selectedPcode);if(p){ctx.font='28px Arial';ctx.fillText(`${p.municipality}, ${p.district}`,72,168);}
-    ctx.fillStyle='#fff';ctx.fillRect(0,H-footer,W,footer);ctx.fillStyle='#555';ctx.font='24px Arial';
-    ctx.fillText('Source: Nepal WASH Severity Analysis | Basemap © OpenStreetMap contributors © CARTO',72,H-34);
+    ctx.fillStyle='#fff';ctx.fillRect(0,0,W,header);
+    ctx.fillStyle='#009999';ctx.fillRect(0,0,W,20);
+    ctx.fillStyle='#024E6C';ctx.font='bold 58px Arial';
+    ctx.fillText('Nepal Flood WASH Severity Analysis',72,82);
+    ctx.fillStyle='#555';ctx.font='34px Arial';
+    ctx.fillText(currentTheme().name,72,132);
+    const p=DATA.byPcode.get(state.selectedPcode);
+    if(p){ctx.font='28px Arial';ctx.fillText(`${p.municipality}, ${p.district}`,72,168);}
   }
+
+  ctx.fillStyle='#fff';ctx.fillRect(0,H-footer,W,footer);
+  ctx.fillStyle='#555';ctx.font=(a4?'24px':'13px')+' Arial';
+  ctx.fillText('Nepal Flood WASH Severity Analysis · Basemap © OpenStreetMap contributors © CARTO',a4?72:18,H-(a4?34:15));
+
   drawLegendOnCanvas(ctx,W,H-footer,a4);
-  const link=document.createElement('a');link.download=`nepal-wash-severity-${state.mapIndicator}-${mode}.png`;link.href=canvas.toDataURL('image/png');link.click();
+
+  try{
+    const link=document.createElement('a');
+    link.download=`nepal-wash-severity-${state.mapIndicator}-${mode}.png`;
+    link.href=canvas.toDataURL('image/png');
+    link.click();
+  }catch(err){
+    console.error('Map export failed',err);
+  }
 }
 document.getElementById('download-csv').addEventListener('click',()=>{
   const head=['Rank','District','Municipality','ADM3_PCODE','Priority','People_Affected','Need_Score','Impact_and_Disruption','Current_WASH_Provisional','Vulnerability_and_Aggravating'];
