@@ -534,13 +534,7 @@ function showHoldingPopup(e){
        <b>Priority WASH gaps:</b> ${esc(safe(p.priority_wash_gaps))}
      </div>`).addTo(map);
 }
-function roadClass(p){
-  const code=Number(p.CURR_PHYS);
-  if(code===4)return {label:'Not Passable',color:'#C62828'};
-  if(code===3)return {label:'Passable with restrictions/Damaged',color:'#F59E0B'};
-  if(code===1)return {label:'Passable/Undamaged',color:'#2E7D32'};
-  return {label:'Others',color:'#6B7280'};
-}
+
 function showRoadPopup(e){
   const p=e.features?.[0]?.properties||{};
   new maplibregl.Popup({maxWidth:'360px'}).setLngLat(e.lngLat).setHTML(
@@ -636,11 +630,7 @@ function setupMapIndicator(){
   sel.addEventListener('change',()=>{state.mapIndicator=sel.value;applyThematicLayer();});
 }
 function currentTheme(){return THEMATIC_LAYERS.find(x=>x.id===state.mapIndicator)||THEMATIC_LAYERS[0];}
-function quantileBreaks(values){
-  const a=values.filter(v=>Number.isFinite(v)).sort((a,b)=>a-b); if(!a.length)return [0,1,2,3];
-  const q=p=>a[Math.min(a.length-1,Math.floor((a.length-1)*p))];
-  return [q(.2),q(.4),q(.6),q(.8)];
-}
+
 function applyThematicLayer(){
   if(!map.getLayer('priority-fill')||!DATA.adm3||!DATA.byPcode)return;
   const t=currentTheme();
@@ -708,7 +698,7 @@ function getLegendSpec(){
 }
 
 function renderLegend(){
-  const root=document.getElementById('map-legend')||document.getElementById('legend-content');
+  const root=document.getElementById('map-legend');
   if(!root||!DATA.profiles)return;
   const spec=getLegendSpec();
   let html=`<div class="legend-title">${spec.title}</div>`;
@@ -829,11 +819,7 @@ function driverCandidates(p){
     {name:'Physical access constraints',score:n(p.physical_access_score),detail:'Access aggravating factor'}
   ].filter(x=>x.score!=null).sort((a,b)=>b.score-a.score);
 }
-function driverHtml(p){
-  const top=driverCandidates(p).filter(x=>x.score>=3.4).slice(0,4);
-  const use=top.length?top:driverCandidates(p).slice(0,3);
-  return use.map(x=>{const b=scoreBand(x.score);return `<li><b>${x.name} — ${b.className}</b><br><span class="popup-sub">${x.detail}</span></li>`;}).join('');
-}
+
 function severityClassFromScore(v){return scoreBand(v).className;}
 function driverNarrative(p){
   const candidates=[
@@ -895,7 +881,7 @@ function renderProfileTab(p,tab){
     </table>`;
   }
 }
-function scoreText(v){if(v==null)return 'Unknown';const b=scoreBand(v);return `${b.className} · ${fmt1.format(v)}/5`;}
+
 
 function setupAnalysisFilters(){
   const d=document.getElementById('analysis-district'); if(d&&d.options.length===1)[...new Set(DATA.profiles.map(x=>x.district))].sort().forEach(x=>d.add(new Option(x,x)));
