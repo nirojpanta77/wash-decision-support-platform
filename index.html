@@ -166,7 +166,7 @@ button,select,input{font:inherit}.topbar{height:78px;background:var(--teal);bord
       <div class="about-stack">
         <article class="info-card">
           <h3>Why this analysis was developed</h3>
-          <p>The 2026 floods affected communities and WASH services across multiple municipalities in Nepal. The analysis brings together available impact, service-disruption, current WASH-condition and vulnerability information so that users can quickly see where needs are greatest, what is driving severity, and which underlying indicators should be checked in more detail.</p>
+          <p>The late-August 2026 flood emergency caused widespread disruption across parts of central Nepal, damaging water-supply systems, affecting road access and displacing people into temporary holding centres. The analysis brings together available impact, service-disruption, current WASH-condition and vulnerability information so that users can quickly see where needs are greatest, what is driving severity, and which underlying indicators should be checked in more detail.</p>
           <p style="margin-top:8px">The analytical cohort covers <strong>17 affected municipalities across six districts</strong>. Municipality-level affected-population estimates used in the model total <strong>84,270 people</strong>. Holding-centre information is shown separately as site-level operational context and may include locations outside the 17-municipality analytical cohort.</p>
         </article>
 
@@ -174,6 +174,7 @@ button,select,input{font:inherit}.topbar{height:78px;background:var(--teal);bord
           <h3>What the final priority means</h3>
           <p>The final map is a prioritisation view across the 17 affected municipalities. It combines three groups of information: <strong>flood impact and WASH service disruption</strong>, <strong>current WASH conditions</strong>, and <strong>pre-existing vulnerability and aggravating factors</strong>. The class labels — Very High, High, Moderate, Low and Minimal — are intended to be read together with the underlying drivers rather than as stand-alone labels.</p>
           <p style="margin-top:8px">A municipality can therefore be Very High for different reasons. One municipality may have a very large affected population and major disruption to water-supply systems, while another may have lower direct impact but much higher pre-existing vulnerability. The municipality panel explicitly shows the dominant drivers.</p>
+          <p style="margin-top:8px">For the final priority classification, municipalities are ordered within the 17 affected-municipality cohort, while minimum Need Score guardrails prevent a location from receiving a Very High, High or Moderate label purely because of its relative position. The continuous Need Score and its absolute class remain available separately.</p>
         </article>
 
         <article class="info-card">
@@ -183,7 +184,7 @@ button,select,input{font:inherit}.topbar{height:78px;background:var(--teal);bord
             <div class="method-box"><strong>35%</strong><span>Current WASH conditions</span><p>Current water access, water quality, sanitation/hygiene and displacement pressure. This component is provisional because municipality-level evidence is still uneven.</p></div>
             <div class="method-box"><strong>20%</strong><span>Pre-existing vulnerability & aggravating factors</span><p>Drinking Water vulnerability, sanitation vulnerability, poverty & inequality, and physical access constraints.</p></div>
           </div>
-          <p style="margin-top:10px"><strong>Overall Need Score = 45% impact/service disruption + 35% current WASH conditions + 20% vulnerability/aggravating factors.</strong> Where a vulnerability component is missing, the available components are reweighted so that missing data do not automatically become a low score.</p>
+          <p style="margin-top:10px"><strong>Overall Need Score = 45% impact/service disruption + 35% current WASH conditions + 20% vulnerability/aggravating factors.</strong> Where an input within a component is missing, the available inputs are reweighted where the methodology allows. If the entire vulnerability component is unavailable, the remaining major components are reweighted so that missing data do not automatically become a low score.</p>
         </article>
 
         <article class="info-card">
@@ -326,7 +327,7 @@ async function boot(){
       status.textContent=`Loaded with ${issues.length} warning${issues.length>1?'s':''}`;
       console.warn('Platform warnings:',issues);
     }else{
-      status.textContent=`Data build: ${DATA.metadata.generated_date} · ${DATA.metadata.affected_municipalities} municipalities`;
+      status.textContent=`Data snapshot: ${DATA.metadata.generated_date} · ${DATA.metadata.affected_municipalities} municipalities`;
     }
   }catch(err){
     console.error('Platform initialisation error:',err);
@@ -904,7 +905,7 @@ function renderAboutSources(){
   const root=document.getElementById('about-source-list'); if(!root)return;
   const unique=[]; const seen=new Set();
   DATA.sources.forEach(x=>{const name=x.source_name||x.source_dataset||x.source||x.title||x.dataset||x.source_id;if(name&&!seen.has(name)){seen.add(name);unique.push(x);}});
-  root.innerHTML=unique.slice(0,24).map(x=>`<div class="source-row"><strong>${safe(x.source_name||x.source_dataset||x.source||x.title||x.dataset||x.source_id)}</strong>${x.source_date?` · ${x.source_date}`:''}${x.use_in_analysis||x.analytical_use?`<br><span>${safe(x.use_in_analysis||x.analytical_use)}</span>`:''}</div>`).join('');
+  root.innerHTML=unique.slice(0,24).map(x=>`<div class="source-row"><strong>${esc(safe(x.source_name||x.source_dataset||x.source||x.title||x.dataset||x.source_id))}</strong>${x.source_date?` · ${x.source_date}`:''}${x.use_in_analysis||x.analytical_use?`<br><span>${safe(x.use_in_analysis||x.analytical_use)}</span>`:''}</div>`).join('');
 }
 function renderAnalysis(){
   if(!DATA.profiles) return;
