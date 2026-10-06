@@ -130,7 +130,6 @@ button,select,input{font:inherit}.topbar{height:78px;background:var(--teal);bord
             </div>
           </div>
         </div>
-        <div class="map-actions"><button id="export-map" class="map-action">Export map PNG</button></div>
         <div id="map-legend" class="legend" aria-label="Map legend"></div>
       </div>
 
@@ -627,22 +626,22 @@ function selectMunicipality(pcode,zoom){
 
 
 const THEMATIC_LAYERS=[
-  {id:'priority',name:'Final WASH priority',field:'priority_level',type:'score',description:'Final prioritisation across the 17 affected municipalities'},
-  {id:'need',name:'Overall Need Severity',field:'need_score',type:'continuous',description:'Continuous combined Need Score'},
-  {id:'impact',name:'Flood impact & WASH service disruption',field:'p1',type:'score',description:'Affected population, damaged-WSS beneficiaries and government WSS damage'},
-  {id:'current',name:'Current WASH conditions — provisional',field:'p2',type:'score',description:'Water access, water quality, sanitation/hygiene and displacement pressure'},
-  {id:'vulnerability',name:'Pre-existing vulnerability & aggravating factors',field:'p3',type:'score',description:'Drinking Water, sanitation, poverty/inequality and physical access'},
-  {id:'affected-pop',name:'People affected',field:'affected_population',type:'magnitude',description:'Municipality-level affected-population estimate'},
-  {id:'damaged-wss',name:'People served by damaged WSS',field:'damaged_wss_beneficiaries',type:'magnitude',description:'Population served by reported damaged water-supply systems'},
-  {id:'gov-wss',name:'Government WSS damage score',field:'govt_wss_damage_score',type:'score',description:'Government-reported named-WSS damage-cost score'},
-  {id:'water-access',name:'Current water access',field:'water_access_score',type:'score',description:'Current WASH conditions component'},
-  {id:'water-quality',name:'Water quality',field:'water_quality_score',type:'score',description:'Current WASH conditions component'},
-  {id:'san-hygiene',name:'Sanitation & hygiene',field:'sanitation_hygiene_score',type:'score',description:'Current WASH conditions component'},
-  {id:'displacement',name:'Displacement pressure',field:'displacement_pressure_score',type:'score',description:'Current WASH conditions component'},
-  {id:'dw-vuln',name:'Drinking Water vulnerability',field:'drinking_water_vulnerability_score',type:'score',description:'Pre-existing vulnerability component'},
-  {id:'san-vuln',name:'Sanitation vulnerability',field:'sanitation_vulnerability_score',type:'score',description:'Pre-existing vulnerability component'},
-  {id:'poverty',name:'Poverty & inequality',field:'poverty_inequality_score',type:'score',description:'Pre-existing vulnerability component'},
-  {id:'physical-access',name:'Physical access',field:'physical_access_score',type:'score',description:'Aggravating access constraint'}
+  {id:'priority',name:'Final WASH priority',kind:'priority',note:'Relative prioritisation across the 17 affected municipalities'},
+  {id:'need',name:'Overall Need Severity',kind:'need',note:'Absolute combined Need Score'},
+  {id:'impact',name:'Flood impact & WASH service disruption',kind:'score',note:'Component score'},
+  {id:'current',name:'Current WASH conditions — provisional',kind:'score',note:'Provisional component score'},
+  {id:'vulnerability',name:'Pre-existing vulnerability & aggravating factors',kind:'score',note:'Component score'},
+  {id:'affected',name:'People affected',kind:'score',note:'Magnitude-first score with possible uplift for high affected share'},
+  {id:'damaged_wss',name:'People served by damaged water-supply systems',kind:'score',note:'Magnitude-first score with possible uplift for high affected share'},
+  {id:'govt_damage',name:'Government-reported water-supply damage',kind:'score',note:'Government-reported WSS damage-cost score'},
+  {id:'water_access',name:'Current water access — provisional',kind:'score',note:'Current WASH indicator'},
+  {id:'water_quality',name:'Water quality — provisional',kind:'score',note:'Current WASH indicator'},
+  {id:'san_hyg',name:'Sanitation & hygiene — provisional',kind:'score',note:'Current WASH indicator'},
+  {id:'displacement',name:'Displacement pressure — provisional',kind:'score',note:'Current WASH indicator'},
+  {id:'dw_vulnerability',name:'Drinking Water vulnerability',kind:'score',note:'Pre-existing vulnerability indicator'},
+  {id:'san_vulnerability',name:'Sanitation vulnerability',kind:'score',note:'Pre-existing vulnerability indicator'},
+  {id:'poverty',name:'Poverty & inequality',kind:'score',note:'Pre-existing vulnerability indicator'},
+  {id:'physical_access',name:'Physical access constraints',kind:'score',note:'Aggravating access constraint'}
 ];
 function setupMapIndicator(){
   const sel=document.getElementById('map-indicator');
@@ -657,39 +656,82 @@ function quantileBreaks(values){
   return [q(.2),q(.4),q(.6),q(.8)];
 }
 function applyThematicLayer(){
-  if(!map.getLayer('priority-fill'))return;
-  const t=currentTheme(), values=DATA.profiles.map(p=>n(p[t.field])).filter(v=>v!=null);
-  if(t.type==='score'){
-    map.setPaintProperty('priority-fill','fill-color',['step',['coalesce',['to-number',['get',t.field]],0],
-      '#B3B5B9',1.5,LEVEL_COLORS[1],2.5,LEVEL_COLORS[2],3.5,LEVEL_COLORS[3],4.5,LEVEL_COLORS[4],4.75,LEVEL_COLORS[5]]);
-  }else if(t.id==='priority'){
-    map.setPaintProperty('priority-fill','fill-color',['match',['get','priority_level'],5,LEVEL_COLORS[5],4,LEVEL_COLORS[4],3,LEVEL_COLORS[3],2,LEVEL_COLORS[2],1,LEVEL_COLORS[1],'#B3B5B9']);
-  }else{
-    const b=quantileBreaks(values);
-    map.setPaintProperty('priority-fill','fill-color',['step',['coalesce',['to-number',['get',t.field]],-999],
-      '#B3B5B9',b[0],'#D6EEF0',b[1],'#91CED1',b[2],'#46AEB1',b[3],'#047C7F']);
-  }
-  document.getElementById('map-badge').textContent=t.name;
+  if(!map.getLayer('priority-fill')||!DATA.adm3||!DATA.byPcode)return;
+  const t=currentTheme();
+  DATA.adm3.features.forEach(f=>{
+    const p=DATA.byPcode.get(f.properties.adm3_pcode); if(!p)return;
+    const r=analysisResult(p,t.id);
+    f.properties.display_level=r.level;
+    f.properties.display_class=r.className;
+    f.properties.display_value=r.value;
+    f.properties.display_label=r.label;
+  });
+  map.getSource('adm3').setData(DATA.adm3);
+  map.setPaintProperty('priority-fill','fill-color',
+    ['match',['get','display_level'],
+      5,LEVEL_COLORS[5],4,LEVEL_COLORS[4],3,LEVEL_COLORS[3],2,LEVEL_COLORS[2],1,LEVEL_COLORS[1],
+      '#B3B5B9']);
+  document.getElementById('map-badge').textContent=(state.mode==='scenario'&&['priority','need'].includes(t.id)?'Scenario · ':'')+t.name;
   renderLegend();
 }
-function renderLegend(){
-  const root=document.getElementById('legend-content'); if(!root||!DATA.profiles)return;
+
+function getLegendSpec(){
   const t=currentTheme();
-  let html=`<div class="legend-title">${t.name}</div>`;
-  if(t.id==='priority'||t.type==='score'){
-    html+=['Very High','High','Moderate','Low','Minimal'].map((c,i)=>`<div><span class="swatch" style="background:${[LEVEL_COLORS[5],LEVEL_COLORS[4],LEVEL_COLORS[3],LEVEL_COLORS[2],LEVEL_COLORS[1]][i]}"></span>${c}</div>`).join('');
+  const items=[];
+  let note=t.note||'';
+  if(t.kind==='priority'){
+    items.push(
+      {label:'Very High',color:LEVEL_COLORS[5]},
+      {label:'High',color:LEVEL_COLORS[4]},
+      {label:'Moderate',color:LEVEL_COLORS[3]},
+      {label:'Low',color:LEVEL_COLORS[2]},
+      {label:'Minimal',color:LEVEL_COLORS[1]}
+    );
+    note='Final priority class across the affected-municipality cohort.';
+  }else if(t.kind==='need'){
+    items.push(
+      {label:'Very High  ≥ 4.00',color:LEVEL_COLORS[5]},
+      {label:'High  3.25–<4.00',color:LEVEL_COLORS[4]},
+      {label:'Moderate  2.50–<3.25',color:LEVEL_COLORS[3]},
+      {label:'Low  1.75–<2.50',color:LEVEL_COLORS[2]},
+      {label:'Minimal  < 1.75',color:LEVEL_COLORS[1]}
+    );
+    note='Absolute Need Score bands.';
   }else{
-    const vals=DATA.profiles.map(p=>n(p[t.field])).filter(v=>v!=null), b=quantileBreaks(vals);
-    html+=`<div class="note">Graduated across affected municipalities</div>`;
-    html+=[['Highest','#047C7F'],['High','#46AEB1'],['Moderate','#91CED1'],['Low','#D6EEF0']].map(x=>`<div><span class="swatch" style="background:${x[1]}"></span>${x[0]}</div>`).join('');
+    items.push(
+      {label:'Very High  4.20–5.00',color:LEVEL_COLORS[5]},
+      {label:'High  3.40–<4.20',color:LEVEL_COLORS[4]},
+      {label:'Moderate  2.60–<3.40',color:LEVEL_COLORS[3]},
+      {label:'Low  1.80–<2.60',color:LEVEL_COLORS[2]},
+      {label:'Minimal  1.00–<1.80',color:LEVEL_COLORS[1]}
+    );
+    const hasUnknown=DATA.profiles.some(p=>analysisResult(p,t.id).level===0);
+    if(hasUnknown) items.push({label:'Unknown / no municipality-specific evidence',color:'#B3B5B9'});
   }
-  if(state.visibleLayers.has('roads')) html+=`<div class="legend-title" style="margin-top:8px">Road access status</div>
-    <div class="dynamic-legend-row"><span class="line-swatch" style="border-color:#D7191C"></span>Not Passable</div>
-    <div class="dynamic-legend-row"><span class="line-swatch" style="border-color:#F39C12"></span>Passable with restrictions/Damaged</div>
-    <div class="dynamic-legend-row"><span class="line-swatch" style="border-color:#3B7D23"></span>Passable/Undamaged</div>
-    <div class="dynamic-legend-row"><span class="line-swatch" style="border-color:#566573"></span>Others</div>`;
-  if(state.visibleLayers.has('flood')) html+=`<div class="legend-title" style="margin-top:8px">Flood extent</div><div><span class="swatch" style="background:#2A9FD6;opacity:.55;border:1px solid #0B6FA4"></span>Mapped flood extent</div>`;
-  if(state.visibleLayers.has('holding')) html+=`<div class="legend-title" style="margin-top:8px">Holding centres</div><div><span class="swatch" style="background:#532F87;border-radius:50%"></span>IOM assessed site</div>`;
+  const overlays=[];
+  if(state.visibleLayers.has('roads')) overlays.push(
+    {title:'Road access status'},
+    {label:'Not Passable',color:'#D7191C',line:true},
+    {label:'Passable with restrictions/Damaged',color:'#F39C12',line:true},
+    {label:'Passable/Undamaged',color:'#3B7D23',line:true},
+    {label:'Others',color:'#566573',line:true}
+  );
+  if(state.visibleLayers.has('flood')) overlays.push({title:'Flood extent'},{label:'Mapped flood extent',color:'#2A9FD6'});
+  if(state.visibleLayers.has('holding')) overlays.push({title:'Holding centres'},{label:'IOM assessed site',color:'#532F87',circle:true});
+  return {title:t.name,note,items,overlays};
+}
+
+function renderLegend(){
+  const root=document.getElementById('map-legend')||document.getElementById('legend-content');
+  if(!root||!DATA.profiles)return;
+  const spec=getLegendSpec();
+  let html=`<div class="legend-title">${spec.title}</div>`;
+  if(spec.note) html+=`<div class="note" style="margin-bottom:6px">${spec.note}</div>`;
+  html+=spec.items.map(x=>`<div class="dynamic-legend-row"><span class="${x.line?'line-swatch':'swatch'}" style="${x.line?'border-color:'+x.color:'background:'+x.color};${x.circle?'border-radius:50%;':''}"></span><span>${x.label}</span></div>`).join('');
+  for(const x of spec.overlays){
+    if(x.title) html+=`<div class="legend-title" style="margin-top:8px">${x.title}</div>`;
+    else html+=`<div class="dynamic-legend-row"><span class="${x.line?'line-swatch':'swatch'}" style="${x.line?'border-color:'+x.color:'background:'+x.color};${x.circle?'border-radius:50%;':''}"></span><span>${x.label}</span></div>`;
+  }
   root.innerHTML=html;
 }
 
@@ -819,6 +861,11 @@ function affectedPopCombinedScore(p){const a=affectedAbsScore(n(p.affected_popul
 function wssAbsScore(v){return v>=10000?5:v>=3000?4:v>=1000?3:v>0?2:1}
 function wssShareScore(v){return v>=.5?5:v>=.3?4:v>=.15?3:v>=.05?2:1}
 function damagedWssCombinedScore(p){const a=wssAbsScore(n(p.damaged_wss_beneficiaries)||0),b=wssShareScore(n(p.wss_beneficiary_share)||0);return Math.min(5,a+Math.max(0,b-a)*.5)}
+function indicatorCell(v,detail=''){
+  if(v==null||v===''||Number.isNaN(Number(v))) return '<strong>Unknown</strong>';
+  const b=scoreBand(v);
+  return `<strong>${b.className}</strong><br><small>${fmt1.format(Number(v))}/5${detail?' · '+detail:''}</small>`;
+}
 function renderProfileTab(p,tab){
   const root=document.getElementById('profile-body'); const d=getDisplayResult(p.adm3_pcode);
   if(tab==='overview'){
@@ -836,30 +883,25 @@ function renderProfileTab(p,tab){
       <div class="pillar-row"><div class="pillar-name"><strong>Pre-existing vulnerability & aggravating factors</strong><br><small>${p.p3_class}</small></div><div class="pillar-score">${fmt1.format(p.p3)} / 5</div></div>
       <div class="note" style="margin-top:10px">Need Score ${fmt1.format(d.score)} / 5 · numerical score shown for transparency.</div>`;
   } else {
+    const affectedScoreValue=affectedPopCombinedScore(p);
+    const wssScoreValue=damagedWssCombinedScore(p);
     root.innerHTML=`<table class="indicator-table">
-      <tr><td>People affected</td><td><strong>${severityClassFromScore(affectedPopCombinedScore(p))}</strong><br><small>${fmtInt.format(p.affected_population||0)} people</small></td></tr>
-      <tr><td>People served by damaged WSS</td><td><strong>${severityClassFromScore(damagedWssCombinedScore(p))}</strong><br><small>${fmtInt.format(p.damaged_wss_beneficiaries||0)} people</small></td></tr>
-      <tr><td>Government-reported WSS damage</td><td><strong>${severityClassFromScore(p.govt_wss_damage_score)}</strong>${p.govt_wss_damage_cost_npr? `<br><small>NPR ${fmtInt.format(p.govt_wss_damage_cost_npr)}</small>`:''}</td></tr>
-      <tr><td>Current water access</td><td><strong>${severityClassFromScore(p.water_access_score)}</strong> <small>${scoreText(p.water_access_score)}</small></td></tr>
-      <tr><td>Water quality</td><td><strong>${severityClassFromScore(p.water_quality_score)}</strong> <small>${scoreText(p.water_quality_score)}</small></td></tr>
-      <tr><td>Sanitation & hygiene</td><td><strong>${severityClassFromScore(p.sanitation_hygiene_score)}</strong> <small>${scoreText(p.sanitation_hygiene_score)}</small></td></tr>
-      <tr><td>Displacement pressure</td><td><strong>${severityClassFromScore(p.displacement_pressure_score)}</strong> <small>${scoreText(p.displacement_pressure_score)}</small></td></tr>
-      <tr><td>Drinking Water vulnerability</td><td><strong>${severityClassFromScore(p.dw_vulnerability_score)}</strong> <small>${scoreText(p.dw_vulnerability_score)}</small></td></tr>
-      <tr><td>Sanitation vulnerability</td><td><strong>${severityClassFromScore(p.san_vulnerability_score)}</strong> <small>${scoreText(p.san_vulnerability_score)}</small></td></tr>
-      <tr><td>Poverty & inequality</td><td><strong>${severityClassFromScore(p.poverty_inequality_score)}</strong> <small>${scoreText(p.poverty_inequality_score)}</small></td></tr>
-      <tr><td>Physical access</td><td><strong>${severityClassFromScore(p.physical_access_score)}</strong> <small>${scoreText(p.physical_access_score)}</small></td></tr>
+      <tr><td>People affected</td><td>${indicatorCell(affectedScoreValue,fmtInt.format(p.affected_population||0)+' people')}</td></tr>
+      <tr><td>People served by damaged WSS</td><td>${indicatorCell(wssScoreValue,fmtInt.format(p.damaged_wss_beneficiaries||0)+' people')}</td></tr>
+      <tr><td>Government-reported WSS damage</td><td>${indicatorCell(p.govt_wss_damage_score,p.govt_wss_damage_cost_npr?'NPR '+fmtInt.format(p.govt_wss_damage_cost_npr):'')}</td></tr>
+      <tr><td>Current water access</td><td>${indicatorCell(p.water_access_score)}</td></tr>
+      <tr><td>Water quality</td><td>${indicatorCell(p.water_quality_score)}</td></tr>
+      <tr><td>Sanitation & hygiene</td><td>${indicatorCell(p.sanitation_hygiene_score)}</td></tr>
+      <tr><td>Displacement pressure</td><td>${indicatorCell(p.displacement_pressure_score)}</td></tr>
+      <tr><td>Drinking Water vulnerability</td><td>${indicatorCell(p.dw_vulnerability_score)}</td></tr>
+      <tr><td>Sanitation vulnerability</td><td>${indicatorCell(p.san_vulnerability_score)}</td></tr>
+      <tr><td>Poverty & inequality</td><td>${indicatorCell(p.poverty_inequality_score)}</td></tr>
+      <tr><td>Physical access</td><td>${indicatorCell(p.physical_access_score)}</td></tr>
     </table>`;
   }
 }
 function scoreText(v){if(v==null)return 'Unknown';const b=scoreBand(v);return `${b.className} · ${fmt1.format(v)}/5`;}
 
-function setupAnalysisFilters(){
-  const districts=[...new Set(DATA.profiles.map(p=>p.district))].sort();
-  const d=document.getElementById('analysis-district');districts.forEach(x=>d.add(new Option(x,x)));
-  document.getElementById('analysis-search').addEventListener('input',e=>{state.analysisFilter.query=e.target.value.toLowerCase();renderAnalysis();});
-  d.addEventListener('change',e=>{state.analysisFilter.district=e.target.value;renderAnalysis();});
-  document.getElementById('analysis-priority').addEventListener('change',e=>{state.analysisFilter.priority=e.target.value;renderAnalysis();});
-}
 function setupAnalysisFilters(){
   const d=document.getElementById('analysis-district'); if(d&&d.options.length===1)[...new Set(DATA.profiles.map(x=>x.district))].sort().forEach(x=>d.add(new Option(x,x)));
   ['analysis-search','analysis-district','analysis-priority'].forEach(id=>{const el=document.getElementById(id);if(el&&!el.dataset.bound){el.addEventListener(id==='analysis-search'?'input':'change',renderAnalysis);el.dataset.bound='1';}});
@@ -906,20 +948,47 @@ document.querySelectorAll('.tab').forEach(btn=>btn.addEventListener('click',()=>
 document.getElementById('export-map').addEventListener('click',e=>{e.stopPropagation();document.getElementById('export-menu').classList.toggle('open');});
 document.addEventListener('click',()=>document.getElementById('export-menu')?.classList.remove('open'));
 document.querySelectorAll('#export-menu button').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();exportMapImage(b.dataset.export);document.getElementById('export-menu').classList.remove('open');}));
+function drawLegendOnCanvas(ctx,W,H,large=false){
+  const spec=getLegendSpec();
+  const font=large?28:13, titleFont=large?32:14, lineH=large?38:20, pad=large?28:12, sw=large?30:14;
+  const rows=spec.items.length+spec.overlays.filter(x=>!x.title).length+spec.overlays.filter(x=>x.title).length;
+  const boxW=Math.min(large?900:430,W*0.42);
+  const boxH=pad*2+titleFont+lineH*(rows+1)+(spec.note?lineH:0);
+  const x=large?55:18, y=H-boxH-(large?55:18);
+  ctx.save();
+  ctx.fillStyle='rgba(255,255,255,.96)';ctx.strokeStyle='#D9E0E2';ctx.lineWidth=large?2:1;ctx.fillRect(x,y,boxW,boxH);ctx.strokeRect(x,y,boxW,boxH);
+  let cy=y+pad+titleFont;
+  ctx.fillStyle='#024E6C';ctx.font=`700 ${titleFont}px Arial`;ctx.fillText(spec.title,x+pad,cy);
+  cy+=lineH;
+  if(spec.note){ctx.fillStyle='#555';ctx.font=`${font}px Arial`;ctx.fillText(spec.note.slice(0,85),x+pad,cy);cy+=lineH;}
+  const drawItem=item=>{
+    if(item.title){ctx.fillStyle='#024E6C';ctx.font=`700 ${font}px Arial`;ctx.fillText(item.title,x+pad,cy);cy+=lineH;return;}
+    const sx=x+pad, sy=cy-lineH*.55;
+    ctx.strokeStyle=item.color;ctx.fillStyle=item.color;
+    if(item.line){ctx.lineWidth=large?6:4;ctx.beginPath();ctx.moveTo(sx,sy);ctx.lineTo(sx+sw,sy);ctx.stroke();}
+    else if(item.circle){ctx.beginPath();ctx.arc(sx+sw/2,sy,sw*.35,0,Math.PI*2);ctx.fill();}
+    else ctx.fillRect(sx,sy-sw*.35,sw,sw*.7);
+    ctx.fillStyle='#222';ctx.font=`${font}px Arial`;ctx.fillText(item.label,sx+sw+10,cy-lineH*.35);cy+=lineH;
+  };
+  spec.items.forEach(drawItem);spec.overlays.forEach(drawItem);
+  ctx.restore();
+}
 function exportMapImage(mode){
   const source=map.getCanvas(); if(!source)return;
   const a4=mode==='a4', W=a4?3508:source.width, H=a4?2480:source.height;
   const canvas=document.createElement('canvas');canvas.width=W;canvas.height=H;const ctx=canvas.getContext('2d');
   ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
-  const header=a4?155:0, footer=a4?80:0, availH=H-header-footer;
+  const header=a4?180:0, footer=a4?90:0, availH=H-header-footer;
   ctx.drawImage(source,0,header,W,availH);
   if(a4){
-    ctx.fillStyle='#fff';ctx.fillRect(0,0,W,header);ctx.fillStyle='#009999';ctx.fillRect(0,0,W,18);
-    ctx.fillStyle='#024E6C';ctx.font='bold 58px "Arial"';ctx.fillText('Nepal Flood WASH Severity Analysis',72,78);
-    ctx.fillStyle='#555';ctx.font='34px Arial';ctx.fillText(currentTheme().name,72,124);
+    ctx.fillStyle='#fff';ctx.fillRect(0,0,W,header);ctx.fillStyle='#009999';ctx.fillRect(0,0,W,20);
+    ctx.fillStyle='#024E6C';ctx.font='bold 58px Arial';ctx.fillText('Nepal Flood WASH Severity Analysis',72,82);
+    ctx.fillStyle='#555';ctx.font='34px Arial';ctx.fillText(currentTheme().name,72,132);
+    const p=DATA.byPcode.get(state.selectedPcode);if(p){ctx.font='28px Arial';ctx.fillText(`${p.municipality}, ${p.district}`,72,168);}
     ctx.fillStyle='#fff';ctx.fillRect(0,H-footer,W,footer);ctx.fillStyle='#555';ctx.font='24px Arial';
-    ctx.fillText('Source: Nepal WASH Severity Analysis | Basemap © OpenStreetMap contributors © CARTO',72,H-30);
+    ctx.fillText('Source: Nepal WASH Severity Analysis | Basemap © OpenStreetMap contributors © CARTO',72,H-34);
   }
+  drawLegendOnCanvas(ctx,W,H-footer,a4);
   const link=document.createElement('a');link.download=`nepal-wash-severity-${state.mapIndicator}-${mode}.png`;link.href=canvas.toDataURL('image/png');link.click();
 }
 document.getElementById('download-csv').addEventListener('click',()=>{
@@ -929,21 +998,6 @@ document.getElementById('download-csv').addEventListener('click',()=>{
   const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`wash-priority-${state.mode}.csv`;a.click();URL.revokeObjectURL(a.href);
 });
 function csvCell(v){const s=String(v??'');return /[",\n]/.test(s)?`"${s.replace(/"/g,'""')}"`:s;}
-document.getElementById('export-map').addEventListener('click',exportMapPNG);
-function exportMapPNG(){
-  const src=map.getCanvas(); if(!src)return;
-  const scale=3, header=170, footer=80, out=document.createElement('canvas');
-  out.width=src.width*scale; out.height=(src.height+header+footer)*scale;
-  const c=out.getContext('2d');c.scale(scale,scale);c.fillStyle='#fff';c.fillRect(0,0,out.width/scale,out.height/scale);
-  c.fillStyle='#009999';c.fillRect(0,0,src.width,header);
-  c.fillStyle='#fff';c.font='700 30px Roboto Condensed, Arial';c.fillText('NEPAL FLOOD 2026 — WASH SEVERITY ANALYSIS',34,62);
-  c.font='18px Roboto Condensed, Arial';const layer=ANALYSIS_LAYERS.find(x=>x[0]===state.analysisLayer)?.[1]||'WASH severity';c.fillText(layer,34,96);
-  const p=DATA.byPcode.get(state.selectedPcode);if(p){c.font='16px Roboto Condensed, Arial';c.fillText(`${p.municipality}, ${p.district}`,34,128);}
-  c.drawImage(src,0,header,src.width,src.height);
-  c.fillStyle='#fff';c.fillRect(0,header+src.height,src.width,footer);c.fillStyle='#444';c.font='13px Arial';c.fillText('Sources: consolidated government and humanitarian datasets. Map generated from the WASH Severity Analysis platform.',24,header+src.height+32);c.fillText(`Generated ${new Date().toISOString().slice(0,10)} · Basemap © CARTO / OpenStreetMap contributors`,24,header+src.height+54);
-  const a=document.createElement('a');a.href=out.toDataURL('image/png');a.download=`nepal-wash-severity-${state.analysisLayer}-high-resolution.png`;a.click();
-}
-
 </script>
 </body>
 </html>
