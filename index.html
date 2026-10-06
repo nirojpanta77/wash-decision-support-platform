@@ -102,15 +102,15 @@ button,select,input{font:inherit}.topbar{height:78px;background:var(--teal);bord
           </div>
           <div id="scenario-controls" class="scenario-controls" hidden>
             <div class="weight-row">
-              <div><label for="weight-p1">P1 Impact & disruption</label><output id="weight-p1-out">45%</output></div>
+              <div><label for="weight-p1">Flood impact & service disruption</label><output id="weight-p1-out">45%</output></div>
               <input id="weight-p1" type="range" min="0" max="100" value="45" />
             </div>
             <div class="weight-row">
-              <div><label for="weight-p2">P2 Current WASH</label><output id="weight-p2-out">35%</output></div>
+              <div><label for="weight-p2">Current WASH conditions</label><output id="weight-p2-out">35%</output></div>
               <input id="weight-p2" type="range" min="0" max="100" value="35" />
             </div>
             <div class="weight-row">
-              <div><label for="weight-p3">P3 Vulnerability</label><output id="weight-p3-out">20%</output></div>
+              <div><label for="weight-p3">Vulnerability & aggravating factors</label><output id="weight-p3-out">20%</output></div>
               <input id="weight-p3" type="range" min="0" max="100" value="20" />
             </div>
             <p class="note">Scenario weights change interpretation only. Source evidence and official results remain unchanged.</p>
@@ -249,14 +249,12 @@ const state = {
   mode: 'official',
   weights: { p1: 45, p2: 35, p3: 20 },
   selectedPcode: null,
-  analysisLayer: 'priority',
   analysisSort: { key:'rank', dir:'asc' },
   analysisFilter: { query:'', district:'', priority:'' },
   district: '',
   municipality: '',
   visibleLayers: new Set(['adm3','flood','holding']),
   mapIndicator: 'priority',
-  analysisSort: {key:'rank',dir:'asc'},
   scenario: new Map()
 };
 
@@ -397,7 +395,7 @@ const ANALYSIS_LAYERS=[
  ['poverty','Poverty & inequality'],
  ['physical_access','Physical access constraints']
 ];
-function analysisResult(p,id=state.analysisLayer){
+function analysisResult(p,id=state.mapIndicator){
   const d=getDisplayResult(p.adm3_pcode);
   if(id==='priority') return {level:d.priorityLevel,className:d.priorityClass,value:d.score,label:'Overall WASH priority'};
   if(id==='need'){const b=absoluteNeedBand(d.score);return {...b,value:d.score,label:'Need severity'};}
@@ -417,42 +415,6 @@ function analysisResult(p,id=state.analysisLayer){
   if(id==='physical_access'){const v=n(p.physical_access_score),b=scoreBand(v);return {...b,value:v,label:'Physical access constraints'};}
   return {level:0,className:'Unknown',value:null,label:'Unknown'};
 }
-function setupAnalysisSurface(){
-  const sel=document.getElementById('analysis-layer');
-  ANALYSIS_LAYERS.forEach(([id,label])=>sel.add(new Option(label,id)));
-  sel.value=state.analysisLayer;
-  sel.addEventListener('change',()=>{state.analysisLayer=sel.value;applyAnalysisSurface();});
-}
-function applyAnalysisSurface(){
-  if(!DATA.adm3||!DATA.byPcode)return;
-  DATA.adm3.features.forEach(f=>{
-    const p=DATA.byPcode.get(f.properties.adm3_pcode);if(!p)return;
-    const r=analysisResult(p);
-    f.properties.display_level=r.level;f.properties.display_class=r.className;f.properties.display_value=r.value;f.properties.display_label=r.label;
-  });
-  if(map.getSource('adm3'))map.getSource('adm3').setData(DATA.adm3);
-  const label=ANALYSIS_LAYERS.find(x=>x[0]===state.analysisLayer)?.[1]||'WASH severity';
-  document.getElementById('map-badge').textContent=(state.mode==='scenario'&&['priority','need'].includes(state.analysisLayer)?'Scenario · ':'')+label;
-  renderLegacyLegend();
-}
-function renderLegacyLegend(){
-  const el=document.getElementById('map-legend'); if(!el)return;
-  const label=ANALYSIS_LAYERS.find(x=>x[0]===state.analysisLayer)?.[1]||'WASH severity';
-  let html=`<div class="legend-title">${label}</div>
-    <div><span class="swatch severity-5"></span>Very High</div>
-    <div><span class="swatch severity-4"></span>High</div>
-    <div><span class="swatch severity-3"></span>Moderate</div>
-    <div><span class="swatch severity-2"></span>Low</div>
-    <div><span class="swatch severity-1"></span>Minimal</div>`;
-  if(state.visibleLayers.has('roads')) html+=`<div class="legend-separator"></div><div class="legend-title">Road access</div>
-    <div><span class="legend-line" style="background:#C62828"></span>Not Passable</div>
-    <div><span class="legend-line" style="background:#F59E0B"></span>Passable with restrictions/Damaged</div>
-    <div><span class="legend-line" style="background:#2E7D32"></span>Passable/Undamaged</div>
-    <div><span class="legend-line" style="background:#6B7280"></span>Others</div>`;
-  if(state.visibleLayers.has('flood')) html+=`<div class="legend-separator"></div><div><span class="swatch" style="background:#28A1D2;opacity:.45"></span>Mapped flood extent</div>`;
-  el.innerHTML=html;
-}
-
 function enrichAdminGeoJSON(){
   DATA.adm3.features.forEach(f => {
     const p = DATA.byPcode.get(f.properties.adm3_pcode);
@@ -532,7 +494,6 @@ function initialiseMap(){
   map.on('mouseleave','priority-fill',() => {map.getCanvas().style.cursor=''; closeHoverPopup();});
   map.on('click','holding-circle',e => showHoldingPopup(e));
   map.on('click','roads-line',e => showRoadPopup(e));
-  applyAnalysisSurface();
   applyLayerVisibility();
   applyThematicLayer();
   renderLegend();
@@ -767,13 +728,11 @@ function recomputeScenario(){
   if(map.getSource('adm3')){
     DATA.adm3.features.forEach(f=>{const r=state.scenario.get(f.properties.adm3_pcode);if(r){f.properties.priority_level=r.priorityLevel;f.properties.priority_class=r.priorityClass;f.properties.need_score=r.score;}});
     map.getSource('adm3').setData(DATA.adm3);
-  }
-  applyAnalysisSurface(); renderAnalysis(); applyThematicLayer(); if(state.selectedPcode) renderProfile(state.selectedPcode);
+  } renderAnalysis(); applyThematicLayer(); if(state.selectedPcode) renderProfile(state.selectedPcode);
 }
 function restoreOfficial(){
   DATA.adm3.features.forEach(f=>{const p=DATA.byPcode.get(f.properties.adm3_pcode);if(p){f.properties.priority_level=p.priority_level;f.properties.priority_class=p.priority_class;f.properties.need_score=p.need_score;}});
-  if(map.getSource('adm3'))map.getSource('adm3').setData(DATA.adm3);
-  applyAnalysisSurface(); renderAnalysis();applyThematicLayer();if(state.selectedPcode)renderProfile(state.selectedPcode);
+  if(map.getSource('adm3'))map.getSource('adm3').setData(DATA.adm3); renderAnalysis();applyThematicLayer();if(state.selectedPcode)renderProfile(state.selectedPcode);
 }
 function getDisplayResult(pcode){
   const p=DATA.byPcode.get(pcode);
