@@ -286,37 +286,58 @@ const map = new maplibregl.Map({
 map.addControl(new maplibregl.NavigationControl({showCompass:true}), 'top-right');
 map.addControl(new maplibregl.ScaleControl({maxWidth:120,unit:'metric'}), 'bottom-right');
 
-Promise.all([
-  fetchJSON('data/metadata.json'),
-  fetchJSON('data/municipality_profiles.json'),
-  fetchJSON('config/model.json'),
-  fetchJSON('config/layers.json'),
-  fetchJSON('data/adm3_affected.geojson'),
-  fetchJSON('data/adm4_available.geojson'),
-  fetchJSON('data/flood_extent.geojson'),
-  fetchJSON('data/holding_centres.geojson'),
-  fetchJSON('data/roads_nepal_response.geojson')
-]).then(([metadata, profiles, model, layerConfig, adm3, adm4, flood, holding, roads]) => {
-  Object.assign(DATA, {metadata, profiles, model, layerConfig, adm3, adm4, flood, holding, roads});
-  DATA.byPcode = new Map(profiles.map(d => [d.adm3_pcode, d]));
-  DATA.profileNameIndex = new Map(profiles.map(d => [normaliseName(d.municipality), d.adm3_pcode]));
-  enrichAdminGeoJSON();
-  setupFilters();
-  setupMapIndicator();
-  renderLayerList();
-  setupAnalysisSurface();
-  setupAnalysisFilters();
-  setupAnalysisFilters();
-  renderAnalysis();
-  renderAboutSources();
-  document.getElementById('last-updated').textContent = `Data build: ${metadata.generated_date} · ${metadata.affected_municipalities} municipalities`;
-  if (map.loaded()) initialiseMap(); else map.on('load', initialiseMap);
-}).catch(err => {
-  console.error(err);
-  document.getElementById('last-updated').textContent = 'Data load error';
-});
+async function boot(){
+  const status=document.getElementById('last-updated');
+  try{
+    const mandatory={
+      metadata:'data/metadata.json',
+      profiles:'data/municipality_profiles.json',
+      model:'config/model.json',
+      layerConfig:'config/layers.json',
+      adm3:'data/adm3_affected.geojson',
+      adm4:'data/adm4_available.geojson',
+      flood:'data/flood_extent.geojson',
+      holding:'data/holding_centres.geojson',
+      roads:'data/roads_nepal_response.geojson'
+    };
+    const optional={
+      evidence:'data/current_wash_evidence.json',
+      sources:'data/source_registry.json'
+    };
+    const entries=await Promise.all(Object.entries(mandatory).map(async([k,url])=>[k,await fetchJSON(url)]));
+    Object.assign(DATA,Object.fromEntries(entries));
+    for(const [k,url] of Object.entries(optional)){
+      try{ DATA[k]=await fetchJSON(url); }catch(err){ console.warn('Optional dataset unavailable:',url,err); DATA[k]=[]; }
+    }
+    if(!Array.isArray(DATA.profiles)) throw new Error('Municipality profile data are not in the expected format.');
+    DATA.byPcode = new Map(DATA.profiles.map(d => [d.adm3_pcode, d]));
+    DATA.profileNameIndex = new Map(DATA.profiles.map(d => [normaliseName(d.municipality), d.adm3_pcode]));
+    enrichAdminGeoJSON();
+    setupFilters();
+    setupMapIndicator();
+    renderLayerList();
+    setupAnalysisFilters();
+    renderAnalysis();
+    renderAboutSources();
+    status.textContent = `Data build: ${DATA.metadata.generated_date} · ${DATA.metadata.affected_municipalities} municipalities`;
+    if (map.loaded()) initialiseMap(); else map.on('load', initialiseMap);
+  }catch(err){
+    console.error('Platform initialisation error:',err);
+    status.textContent = 'Data load error';
+    const banner=document.createElement('div');
+    banner.style.cssText='position:fixed;left:50%;top:128px;transform:translateX(-50%);z-index:9999;background:#fff3cd;border:1px solid #e3b341;padding:10px 14px;max-width:680px;font:13px Arial;color:#5d4900;box-shadow:0 2px 8px rgba(0,0,0,.15)';
+    banner.innerHTML='<strong>Some platform data could not be initialised.</strong><br>'+String(err.message||err);
+    document.body.appendChild(banner);
+  }
+}
+boot();
 
-function fetchJSON(url){ return fetch(url).then(r => { if(!r.ok) throw new Error(`${url}: ${r.status}`); return r.json(); }); }
+async function fetchJSON(url){
+  const r=await fetch(url,{cache:'no-store'});
+  if(!r.ok) throw new Error(`${url}: HTTP ${r.status}`);
+  const text=await r.text();
+  try{return JSON.parse(text);}catch(e){throw new Error(`${url}: invalid JSON (${e.message})`);}
+}
 function normaliseName(s=''){ return String(s).toLowerCase().replace(/rural municipality|municipality|gaunpalika|nagarpalika/g,'').replace(/[^a-z0-9]/g,'').trim(); }
 function classColor(c){ return COLORS[c] || COLORS.Unknown; }
 const CLASS_LEVEL={'Very High':5,'High':4,'Moderate':3,'Low':2,'Minimal':1,'Unknown':0};
@@ -836,8 +857,8 @@ function setupAnalysisFilters(){
 function renderAboutSources(){
   const root=document.getElementById('about-source-list'); if(!root)return;
   const unique=[]; const seen=new Set();
-  DATA.sources.forEach(x=>{const name=x.source_name||x.source||x.title||x.dataset||x.source_id;if(name&&!seen.has(name)){seen.add(name);unique.push(x);}});
-  root.innerHTML=unique.slice(0,24).map(x=>`<div class="source-row"><strong>${safe(x.source_name||x.source||x.title||x.dataset||x.source_id)}</strong>${x.source_date?` · ${x.source_date}`:''}${x.use_in_analysis||x.analytical_use?`<br><span>${safe(x.use_in_analysis||x.analytical_use)}</span>`:''}</div>`).join('');
+  DATA.sources.forEach(x=>{const name=x.source_name||x.source_dataset||x.source||x.title||x.dataset||x.source_id;if(name&&!seen.has(name)){seen.add(name);unique.push(x);}});
+  root.innerHTML=unique.slice(0,24).map(x=>`<div class="source-row"><strong>${safe(x.source_name||x.source_dataset||x.source||x.title||x.dataset||x.source_id)}</strong>${x.source_date?` · ${x.source_date}`:''}${x.use_in_analysis||x.analytical_use?`<br><span>${safe(x.use_in_analysis||x.analytical_use)}</span>`:''}</div>`).join('');
 }
 function renderAnalysis(){
   if(!DATA.profiles) return;
