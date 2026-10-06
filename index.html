@@ -547,19 +547,34 @@ function extendBounds(bounds,coords){
   coords.forEach(c=>extendBounds(bounds,c));
 }
 
+function clearSelection(){
+  if(state.selectedPcode&&map.getSource('adm3')) map.setFeatureState({source:'adm3',id:state.selectedPcode},{selected:false});
+  state.selectedPcode=null;
+  renderProfile(null);
+}
 function setupFilters(){
   const districts=[...new Set(DATA.profiles.map(d=>d.district))].sort();
   const dsel=document.getElementById('district-filter');
   districts.forEach(d=>dsel.add(new Option(d,d)));
   populateMunicipalities();
-  dsel.addEventListener('change',()=>{state.district=dsel.value;state.municipality='';populateMunicipalities();applyMapFilter();});
+  dsel.addEventListener('change',()=>{
+    clearSelection();
+    state.district=dsel.value;
+    state.municipality='';
+    populateMunicipalities();
+    applyMapFilter();
+  });
   document.getElementById('municipality-filter').addEventListener('change',e=>{
     state.municipality=e.target.value;
-    if(state.municipality) selectMunicipality(state.municipality,true); else applyMapFilter();
+    if(state.municipality) selectMunicipality(state.municipality,true);
+    else { clearSelection(); applyMapFilter(); }
   });
   document.getElementById('reset-map').addEventListener('click',()=>{
-    const oldSelected=state.selectedPcode;if(oldSelected&&map.getSource('adm3')) map.setFeatureState({source:'adm3',id:oldSelected},{selected:false});state.selectedPcode=null;state.district='';state.municipality='';dsel.value='';populateMunicipalities();applyMapFilter();renderProfile(null);
-    const bounds=new maplibregl.LngLatBounds();DATA.adm3.features.forEach(f=>extendBounds(bounds,f.geometry.coordinates));map.fitBounds(bounds,{padding:35});
+    clearSelection();
+    state.district='';state.municipality='';dsel.value='';populateMunicipalities();applyMapFilter();
+    const bounds=new maplibregl.LngLatBounds();
+    DATA.adm3.features.forEach(fe=>extendBounds(bounds,fe.geometry.coordinates));
+    map.fitBounds(bounds,{padding:35});
   });
 }
 function populateMunicipalities(){
@@ -571,7 +586,10 @@ function applyMapFilter(){
   if(!map.getLayer('priority-fill')) return;
   let filter=null;
   if(state.municipality) filter=['==',['get','adm3_pcode'],state.municipality];
-  else if(state.district) filter=['==',['get','adm2_name'],state.district];
+  else if(state.district){
+    const match=DATA.profiles.find(x=>x.district===state.district);
+    if(match) filter=['==',['get','adm2_pcode'],match.adm2_pcode];
+  }
   ['priority-fill','adm3-line','adm3-label'].forEach(id=>map.setFilter(id,filter));
 }
 function selectMunicipality(pcode,zoom){
@@ -714,21 +732,34 @@ function applyLayerVisibility(){
 }
 
 function scenarioScore(p,w=state.weights){
-  const total=w.p1+w.p2+w.p3 || 1;
-  return (p.p1*w.p1+p.p2*w.p2+p.p3*w.p3)/total;
+  const parts=[['p1',p.p1],['p2',p.p2],['p3',p.p3]].filter(([,v])=>v!=null&&Number.isFinite(Number(v)));
+  const total=parts.reduce((sum,[k])=>sum+(Number(w[k])||0),0);
+  if(!total) return null;
+  return parts.reduce((sum,[k,v])=>sum+Number(v)*(Number(w[k])||0),0)/total;
 }
 function recomputeScenario(){
-  const ranked=DATA.profiles.map(p=>({p,score:scenarioScore(p)})).sort((a,b)=>b.score-a.score||a.p.municipality.localeCompare(b.p.municipality));
+  const ranked=DATA.profiles.map(p=>({p,score:scenarioScore(p)}))
+    .filter(x=>x.score!=null)
+    .sort((a,b)=>b.score-a.score||a.p.municipality.localeCompare(b.p.municipality));
   state.scenario=new Map();
   ranked.forEach((x,i)=>{
-    const rank=i+1; const rc=DATA.model.cohortRankClasses.find(c=>rank<=c.maxRank) || DATA.model.cohortRankClasses.at(-1);
+    const rank=i+1;
+    const rc=DATA.model.cohortRankClasses.find(c=>rank<=c.maxRank && x.score>=(c.minScore??0))
+      || DATA.model.cohortRankClasses.slice().reverse().find(c=>x.score>=(c.minScore??0))
+      || DATA.model.cohortRankClasses.at(-1);
     const ac=DATA.model.absoluteClasses.find(c=>x.score>=c.min) || DATA.model.absoluteClasses.at(-1);
     state.scenario.set(x.p.adm3_pcode,{score:x.score,rank,priorityClass:rc.class,priorityLevel:rc.level,absoluteClass:ac.class,absoluteLevel:ac.level});
   });
   if(map.getSource('adm3')){
-    DATA.adm3.features.forEach(f=>{const r=state.scenario.get(f.properties.adm3_pcode);if(r){f.properties.priority_level=r.priorityLevel;f.properties.priority_class=r.priorityClass;f.properties.need_score=r.score;}});
+    DATA.adm3.features.forEach(fe=>{
+      const r=state.scenario.get(fe.properties.adm3_pcode);
+      if(r){fe.properties.priority_level=r.priorityLevel;fe.properties.priority_class=r.priorityClass;fe.properties.need_score=r.score;}
+    });
     map.getSource('adm3').setData(DATA.adm3);
-  } renderAnalysis(); applyThematicLayer(); if(state.selectedPcode) renderProfile(state.selectedPcode);
+  }
+  renderAnalysis();
+  applyThematicLayer();
+  if(state.selectedPcode) renderProfile(state.selectedPcode);
 }
 function restoreOfficial(){
   DATA.adm3.features.forEach(f=>{const p=DATA.byPcode.get(f.properties.adm3_pcode);if(p){f.properties.priority_level=p.priority_level;f.properties.priority_class=p.priority_class;f.properties.need_score=p.need_score;}});
@@ -796,9 +827,7 @@ function driverHtml(p){
   const use=top.length?top:driverCandidates(p).slice(0,3);
   return use.map(x=>{const b=scoreBand(x.score);return `<li><b>${x.name} — ${b.className}</b><br><span class="popup-sub">${x.detail}</span></li>`;}).join('');
 }
-function severityClassFromScore(v){
-  if(v==null)return 'Unknown'; if(v>=4.5)return 'Very High'; if(v>=3.5)return 'High'; if(v>=2.5)return 'Moderate'; if(v>=1.5)return 'Low'; return 'Minimal';
-}
+function severityClassFromScore(v){return scoreBand(v).className;}
 function driverNarrative(p){
   const candidates=[
     {label:'Flood impact & WASH service disruption',cls:p.p1_class,score:p.p1},
