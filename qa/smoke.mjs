@@ -46,7 +46,7 @@ await page.locator('#analysis-table th[data-sort="municipality"]').click();
 
 // About methodology.
 await page.getByRole('button',{name:'About'}).click();
-const about=await page.locator('#about-view').innerText();
+const about=await page.locator('#about-view').textContent();
 for(const phrase of ['45%','35%','20%','Current WASH conditions','Data sources']){
   if(!about.includes(phrase)) throw new Error('About section missing: '+phrase);
 }
