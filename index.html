@@ -84,10 +84,6 @@ button,select,input{font:inherit}.topbar{height:78px;background:var(--teal);bord
           <select id="district-filter"><option value="">All affected districts</option></select>
           <label class="field-label" for="municipality-filter">Municipality</label>
           <select id="municipality-filter"><option value="">All municipalities</option></select>
-          <div class="analysis-surface">
-            <label class="field-label" for="analysis-layer">Analysis layer</label>
-            <select id="analysis-layer"></select>
-          </div>
         </div>
 
         <div class="panel">
@@ -288,6 +284,7 @@ map.addControl(new maplibregl.ScaleControl({maxWidth:120,unit:'metric'}), 'botto
 
 async function boot(){
   const status=document.getElementById('last-updated');
+  const issues=[];
   try{
     const mandatory={
       metadata:'data/metadata.json',
@@ -300,33 +297,46 @@ async function boot(){
       holding:'data/holding_centres.geojson',
       roads:'data/roads_nepal_response.geojson'
     };
-    const optional={
-      evidence:'data/current_wash_evidence.json',
-      sources:'data/source_registry.json'
-    };
-    const entries=await Promise.all(Object.entries(mandatory).map(async([k,url])=>[k,await fetchJSON(url)]));
-    Object.assign(DATA,Object.fromEntries(entries));
+    const optional={evidence:'data/current_wash_evidence.json',sources:'data/source_registry.json'};
+    for(const [k,url] of Object.entries(mandatory)){
+      try{ DATA[k]=await fetchJSON(url); }
+      catch(err){ throw new Error(`Required dataset failed: ${url} — ${err.message}`); }
+    }
     for(const [k,url] of Object.entries(optional)){
-      try{ DATA[k]=await fetchJSON(url); }catch(err){ console.warn('Optional dataset unavailable:',url,err); DATA[k]=[]; }
+      try{ DATA[k]=await fetchJSON(url); }
+      catch(err){ console.warn('Optional dataset unavailable:',url,err); DATA[k]=[]; issues.push(url); }
     }
     if(!Array.isArray(DATA.profiles)) throw new Error('Municipality profile data are not in the expected format.');
-    DATA.byPcode = new Map(DATA.profiles.map(d => [d.adm3_pcode, d]));
-    DATA.profileNameIndex = new Map(DATA.profiles.map(d => [normaliseName(d.municipality), d.adm3_pcode]));
+    DATA.byPcode=new Map(DATA.profiles.map(d=>[d.adm3_pcode,d]));
+    DATA.profileNameIndex=new Map(DATA.profiles.map(d=>[normaliseName(d.municipality),d.adm3_pcode]));
     enrichAdminGeoJSON();
-    setupFilters();
-    setupMapIndicator();
-    renderLayerList();
-    setupAnalysisFilters();
-    renderAnalysis();
-    renderAboutSources();
-    status.textContent = `Data build: ${DATA.metadata.generated_date} · ${DATA.metadata.affected_municipalities} municipalities`;
-    if (map.loaded()) initialiseMap(); else map.on('load', initialiseMap);
+
+    status.textContent=`Loaded · ${DATA.metadata.affected_municipalities} municipalities`;
+
+    const safeStep=(label,fn)=>{try{fn();}catch(err){console.error(label,err);issues.push(label+': '+err.message);}};
+    safeStep('Filters',setupFilters);
+    safeStep('Map indicator',setupMapIndicator);
+    safeStep('Layer controls',renderLayerList);
+    safeStep('Analysis filters',setupAnalysisFilters);
+    safeStep('Analysis table',renderAnalysis);
+    safeStep('About sources',renderAboutSources);
+
+    const startMap=()=>{try{initialiseMap();}catch(err){console.error('Map initialization',err);issues.push('Map: '+err.message);}};
+    if(map.loaded()) startMap(); else map.once('load',startMap);
+
+    if(issues.length){
+      status.textContent=`Loaded with ${issues.length} warning${issues.length>1?'s':''}`;
+      console.warn('Platform warnings:',issues);
+    }else{
+      status.textContent=`Data build: ${DATA.metadata.generated_date} · ${DATA.metadata.affected_municipalities} municipalities`;
+    }
   }catch(err){
     console.error('Platform initialisation error:',err);
-    status.textContent = 'Data load error';
+    status.textContent='Data load error';
     const banner=document.createElement('div');
-    banner.style.cssText='position:fixed;left:50%;top:128px;transform:translateX(-50%);z-index:9999;background:#fff3cd;border:1px solid #e3b341;padding:10px 14px;max-width:680px;font:13px Arial;color:#5d4900;box-shadow:0 2px 8px rgba(0,0,0,.15)';
-    banner.innerHTML='<strong>Some platform data could not be initialised.</strong><br>'+String(err.message||err);
+    banner.id='load-error-banner';
+    banner.style.cssText='position:fixed;left:50%;top:128px;transform:translateX(-50%);z-index:9999;background:#fff3cd;border:1px solid #e3b341;padding:10px 14px;max-width:760px;font:13px Arial;color:#5d4900;box-shadow:0 2px 8px rgba(0,0,0,.15)';
+    banner.innerHTML='<strong>Platform data could not be loaded.</strong><br>'+String(err.message||err);
     document.body.appendChild(banner);
   }
 }
@@ -424,9 +434,9 @@ function applyAnalysisSurface(){
   if(map.getSource('adm3'))map.getSource('adm3').setData(DATA.adm3);
   const label=ANALYSIS_LAYERS.find(x=>x[0]===state.analysisLayer)?.[1]||'WASH severity';
   document.getElementById('map-badge').textContent=(state.mode==='scenario'&&['priority','need'].includes(state.analysisLayer)?'Scenario · ':'')+label;
-  renderLegend();
+  renderLegacyLegend();
 }
-function renderLegend(){
+function renderLegacyLegend(){
   const el=document.getElementById('map-legend'); if(!el)return;
   const label=ANALYSIS_LAYERS.find(x=>x[0]===state.analysisLayer)?.[1]||'WASH severity';
   let html=`<div class="legend-title">${label}</div>
