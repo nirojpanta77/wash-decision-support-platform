@@ -267,6 +267,7 @@ const fmt1 = new Intl.NumberFormat('en-GB', {minimumFractionDigits:1,maximumFrac
 const pct0 = v => v == null ? '—' : `${Math.round(Number(v)*100)}%`;
 const n = v => v == null || v === '' || Number.isNaN(Number(v)) ? null : Number(v);
 const safe = v => v == null || v === '' ? '—' : v;
+const esc = v => String(v==null?'':v).replace(/[&<>\"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[ch]));
 
 const map = new maplibregl.Map({
   container:'map',
@@ -502,10 +503,15 @@ function initialiseMap(){
 let hoverPopup;
 function showHoverPopup(lngLat,p){
   closeHoverPopup();
-  const display = analysisResult(p);
-  hoverPopup = new maplibregl.Popup({closeButton:false,closeOnClick:false,offset:8})
+  const display=analysisResult(p,state.mapIndicator);
+  const rawDetail=state.mapIndicator==='affected'
+    ? fmtInt.format(p.affected_population||0)+' people affected'
+    : state.mapIndicator==='damaged_wss'
+      ? fmtInt.format(p.damaged_wss_beneficiaries||0)+' people'
+      : display.value==null?'':fmt1.format(display.value)+' / 5';
+  hoverPopup=new maplibregl.Popup({closeButton:false,closeOnClick:false,offset:8})
     .setLngLat(lngLat)
-    .setHTML(`<div class="popup-title">${p.municipality}</div><div class="popup-sub">${p.district} · ${display.label}</div><div style="margin-top:3px"><b>${display.className}</b>${display.value==null?'':` · ${fmt1.format(display.value)} / 5`}</div>`)
+    .setHTML(`<div class="popup-title">${esc(p.municipality)}</div><div class="popup-sub">${esc(p.district)} · ${esc(display.label)}</div><div style="margin-top:3px"><b>${esc(display.className)}</b>${rawDetail?' · '+esc(rawDetail):''}</div>`)
     .addTo(map);
 }
 function closeHoverPopup(){ if(hoverPopup){hoverPopup.remove();hoverPopup=null;} }
@@ -514,17 +520,17 @@ function showHoldingPopup(e){
   const latrines=n(p.latrines_total), people=n(p.individuals);
   const pplPerLatrine=(people!=null&&latrines>0)?Math.round(people/latrines):null;
   new maplibregl.Popup({maxWidth:'340px'}).setLngLat(e.lngLat).setHTML(
-    `<div class="popup-title">${safe(p.site_name)}</div>
-     <div class="popup-sub">${safe(p.district)} · ${safe(p.municipality)} · Ward ${safe(p.ward)} · ${safe(p.assessment_date)}</div>
+    `<div class="popup-title">${esc(safe(p.site_name))}</div>
+     <div class="popup-sub">${esc(safe(p.district))} · ${esc(safe(p.municipality))} · Ward ${esc(safe(p.ward))} · ${esc(safe(p.assessment_date))}</div>
      <div style="margin-top:7px;font-size:12px;line-height:1.45">
        <b>${fmtInt.format(people||0)} people</b> · ${fmtInt.format(n(p.households)||0)} households<br>
        Functional latrines: <b>${latrines==null?'—':latrines}</b>${pplPerLatrine? ` · ~${pplPerLatrine} people/latrine`:''}<br>
-       Drinking water: ${safe(p.drinking_source)}<br>
-       Water shortage: ${safe(p.water_shortage)}<br>
-       Water storage adequate: ${safe(p.storage_adequate)}<br>
-       Soap/hygiene items: ${safe(p.soap_hygiene)}<br>
-       Solid waste management: ${safe(p.solid_waste)}<br>
-       <b>Priority WASH gaps:</b> ${safe(p.priority_wash_gaps)}
+       Drinking water: ${esc(safe(p.drinking_source))}<br>
+       Water shortage: ${esc(safe(p.water_shortage))}<br>
+       Water storage adequate: ${esc(safe(p.storage_adequate))}<br>
+       Soap/hygiene items: ${esc(safe(p.soap_hygiene))}<br>
+       Solid waste management: ${esc(safe(p.solid_waste))}<br>
+       <b>Priority WASH gaps:</b> ${esc(safe(p.priority_wash_gaps))}
      </div>`).addTo(map);
 }
 function roadClass(p){
@@ -537,9 +543,9 @@ function roadClass(p){
 function showRoadPopup(e){
   const p=e.features?.[0]?.properties||{};
   new maplibregl.Popup({maxWidth:'360px'}).setLngLat(e.lngLat).setHTML(
-    `<div class="popup-title">${safe(p.access_class)}</div>
-     <div style="font-size:12px;line-height:1.45;margin-top:5px">${safe(p.currstatus)}<br>
-     <span class="popup-sub">Source: ${safe(p.currsource)}</span></div>`).addTo(map);
+    `<div class="popup-title">${esc(safe(p.access_class))}</div>
+     <div style="font-size:12px;line-height:1.45;margin-top:5px">${esc(safe(p.currstatus))}<br>
+     <span class="popup-sub">Source: ${esc(safe(p.currsource))}</span></div>`).addTo(map);
 }
 
 function extendBounds(bounds,coords){
